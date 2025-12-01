@@ -1,69 +1,65 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LotterySettings, PrizeConfig } from '../types';
-import { Ticket, Calculator, Plus, Trash2, DollarSign, TrendingUp, ChevronDown, ChevronUp, Settings, BarChart3, Package, Crown } from 'lucide-react';
+import { Plus, Trash2, DollarSign, ChevronDown, ChevronUp, Settings, BarChart3, Package, Crown, Ticket, ArrowRight, Brush } from 'lucide-react';
+import { soundEngine } from '../utils/sound';
 
 interface SetupFormProps {
   onStart: (settings: LotterySettings) => void;
 }
 
 const SetupForm: React.FC<SetupFormProps> = ({ onStart }) => {
-  // Mode Toggle
   const [isAdvanced, setIsAdvanced] = useState(false);
-
-  // Common Settings
-  const [totalTickets, setTotalTickets] = useState(80);
-  const [remainingTickets, setRemainingTickets] = useState(60);
-
-  // Basic Mode Settings
-  const [basicTargetCount, setBasicTargetCount] = useState(5);
-
-  // Advanced Mode Settings
-  const [pricePerTicket, setPricePerTicket] = useState(300);
+  const [totalTickets, setTotalTickets] = useState<number | string>(80);
+  const [remainingTickets, setRemainingTickets] = useState<number | string>(60);
+  const [basicTargetCount, setBasicTargetCount] = useState<number | string>(5);
+  const [pricePerTicket, setPricePerTicket] = useState<number | string>(300);
   const [prizes, setPrizes] = useState<PrizeConfig[]>([
     { id: '1', name: 'A賞', remainingCount: 1, marketValue: 2000 },
     { id: '2', name: 'B賞', remainingCount: 1, marketValue: 1500 },
     { id: '3', name: 'C賞', remainingCount: 2, marketValue: 800 },
   ]);
-  const [smallPrizeValue, setSmallPrizeValue] = useState(50);
-  const [lastOneValue, setLastOneValue] = useState(1200);
+  const [smallPrizeValue, setSmallPrizeValue] = useState<number | string>(50);
+  const [lastOneValue, setLastOneValue] = useState<number | string>(1200);
 
-  // Computed for Advanced
+  const getVal = (v: number | string) => (v === '' ? 0 : Number(v));
   const prizesTotalCount = prizes.reduce((sum, p) => sum + p.remainingCount, 0);
-  const smallPrizeCount = Math.max(0, remainingTickets - prizesTotalCount);
+  const currentRemaining = getVal(remainingTickets);
+  const smallPrizeCount = Math.max(0, currentRemaining - prizesTotalCount);
 
-  // Ensure remaining tickets constraint
-  useEffect(() => {
-    const minTickets = isAdvanced ? prizesTotalCount : basicTargetCount;
-    if (minTickets > remainingTickets) {
-      setRemainingTickets(minTickets);
-    }
-  }, [prizesTotalCount, basicTargetCount, remainingTickets, isAdvanced]);
+  const playClick = () => soundEngine.playClick();
 
   const addPrizeRow = () => {
-    const nextChar = String.fromCharCode(65 + prizes.length); // A, B, C...
-    setPrizes([
-      ...prizes, 
-      { 
-        id: Date.now().toString(), 
-        name: `${nextChar}賞`, 
-        remainingCount: 1, 
-        marketValue: 500 
-      }
-    ]);
+    playClick();
+    const nextChar = String.fromCharCode(65 + prizes.length);
+    setPrizes([...prizes, { id: Date.now().toString(), name: `${nextChar}賞`, remainingCount: 1, marketValue: 500 }]);
   };
 
   const removePrizeRow = (id: string) => {
+    playClick();
     setPrizes(prizes.filter(p => p.id !== id));
   };
 
   const updatePrize = (id: string, field: keyof PrizeConfig, value: string | number) => {
-    setPrizes(prizes.map(p => 
-      p.id === id ? { ...p, [field]: value } : p
-    ));
+    setPrizes(prizes.map(p => {
+        if (p.id !== id) return p;
+        if (field === 'name') return { ...p, name: value as string };
+        return { ...p, [field]: value === '' ? 0 : Number(value) };
+    }));
+  };
+
+  const handleInputChange = (setter: (val: string | number) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      if (val === '') setter('');
+      else setter(Number(val));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    soundEngine.playDrawStart();
+
+    const finalTotal = getVal(totalTickets);
+    let finalRemaining = getVal(remainingTickets);
+    const finalBasicTarget = getVal(basicTargetCount);
 
     let finalPrizes: PrizeConfig[] = [];
     let finalPrice = 0;
@@ -72,170 +68,134 @@ const SetupForm: React.FC<SetupFormProps> = ({ onStart }) => {
 
     if (isAdvanced) {
         finalPrizes = prizes;
-        finalPrice = pricePerTicket;
-        finalLastOne = lastOneValue;
-        finalSmallValue = smallPrizeValue;
+        finalPrice = getVal(pricePerTicket);
+        finalLastOne = getVal(lastOneValue);
+        finalSmallValue = getVal(smallPrizeValue);
+        const minTickets = prizesTotalCount;
+        if (finalRemaining < minTickets) {
+            finalRemaining = minTickets;
+            setRemainingTickets(minTickets);
+        }
     } else {
-        // Basic Mode: Create a generic "Grand Prize" based on count
-        finalPrizes = [{
-            id: 'basic-target',
-            name: '大賞',
-            remainingCount: basicTargetCount,
-            marketValue: 0 // Not used in basic mode
-        }];
-        finalPrice = 0; // Signal to disable financial stats
+        const actualTarget = Math.min(finalBasicTarget, finalRemaining);
+        finalPrizes = [{ id: 'basic-target', name: '大賞', remainingCount: actualTarget, marketValue: 0 }];
+        finalPrice = 0;
         finalLastOne = 0;
         finalSmallValue = 0;
     }
 
     onStart({
-      totalTickets,
+      totalTickets: finalTotal,
       pricePerTicket: finalPrice,
-      remainingTickets,
+      remainingTickets: finalRemaining,
       prizes: finalPrizes,
       smallPrizeValue: finalSmallValue,
       lastOneValue: finalLastOne
     });
   };
 
-  return (
-    <div className="max-w-2xl mx-auto">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-black text-slate-800 mb-2">盤面設定</h2>
-        <p className="text-slate-500">輸入當前抽獎進度，讓我們幫你分析機率</p>
+  const InputField = ({ label, value, onChange, icon: Icon, big = false }: any) => (
+      <div className="space-y-1">
+        <label className="block text-xs font-bold font-serif text-stone-400 uppercase tracking-widest flex items-center gap-2">
+            {Icon && <Icon className="w-3 h-3" />} {label}
+        </label>
+        <div className="relative group">
+            <input
+                type="number"
+                min="1"
+                value={value}
+                onChange={onChange}
+                onFocus={() => soundEngine.playHover()}
+                className={`w-full bg-transparent border-b-2 border-stone-200 rounded-none text-japan-dark 
+                font-serif font-black ${big ? 'text-4xl py-2' : 'text-xl py-1'}
+                focus:border-japan-red focus:outline-none transition-all placeholder:text-stone-300`}
+            />
+        </div>
       </div>
+  );
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+  return (
+    <div className="max-w-xl mx-auto">
+      <form onSubmit={handleSubmit} className="space-y-8">
         
-        {/* Section 1: Basic Stats Card */}
-        <div className="bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden">
-           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-indigo-500"></div>
-           
-           <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-indigo-500" /> 基礎資訊
-           </h3>
-
-           <div className="grid grid-cols-2 gap-6">
-               <div className="space-y-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">總籤數 (Total)</label>
-                  <div className="relative group">
-                    <Package className="absolute left-3 top-3 w-5 h-5 text-slate-400 group-focus-within:text-indigo-500 transition-colors" />
-                    <input
-                        type="number"
-                        value={totalTickets}
-                        onChange={(e) => setTotalTickets(Number(e.target.value))}
-                        className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus:bg-white transition-all outline-none"
-                    />
-                  </div>
-               </div>
-               <div className="space-y-2">
-                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">目前剩餘 (Remaining)</label>
-                  <div className="relative group">
-                    <Ticket className="absolute left-3 top-3 w-5 h-5 text-slate-400 group-focus-within:text-blue-500 transition-colors" />
-                    <input
-                        type="number"
-                        min={isAdvanced ? prizesTotalCount : basicTargetCount}
-                        max={totalTickets}
-                        value={remainingTickets}
-                        onChange={(e) => setRemainingTickets(Number(e.target.value))}
-                        className="w-full pl-10 pr-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl font-black text-blue-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
-                    />
-                  </div>
-               </div>
+        {/* Main Card */}
+        <div className="washi-card p-10 relative overflow-hidden bg-white">
+           <div className="grid grid-cols-2 gap-12">
+               <InputField label="總籤數" value={totalTickets} onChange={handleInputChange(setTotalTickets)} icon={Package} />
+               <InputField label="剩餘籤數" value={remainingTickets} onChange={handleInputChange(setRemainingTickets)} icon={Ticket} />
            </div>
 
-           {/* Basic Mode: Target Count Input */}
             {!isAdvanced && (
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                    <label className="block text-sm font-bold text-slate-700 mb-2">目標大獎 (A/B/C) 剩餘數量</label>
-                    <div className="flex items-center gap-3">
-                        <div className="relative flex-1 group">
-                             <Crown className="absolute left-3 top-3 w-5 h-5 text-red-400 group-focus-within:text-red-500" />
-                             <input
-                                type="number"
-                                min="1"
-                                max={remainingTickets}
-                                value={basicTargetCount}
-                                onChange={(e) => setBasicTargetCount(Number(e.target.value))}
-                                className="w-full pl-10 pr-4 py-3 bg-red-50 border border-red-200 rounded-xl text-2xl font-black text-red-500 focus:ring-2 focus:ring-red-400 focus:border-red-400 outline-none transition-all text-center"
-                            />
-                        </div>
-                        <span className="text-slate-400 font-bold whitespace-nowrap">個大獎</span>
+                <div className="mt-10 pt-8 border-t border-dashed border-stone-300">
+                    <div className="w-full text-center">
+                        <InputField label="大獎總數" value={basicTargetCount} onChange={handleInputChange(setBasicTargetCount)} icon={Crown} big={true} />
+                        <p className="text-xs text-stone-400 mt-2 font-serif">請輸入您鎖定的大獎剩餘數量</p>
                     </div>
-                    <p className="text-xs text-slate-400 mt-2 text-center">適用於不需計算金額，只想看機率的場合</p>
                 </div>
             )}
         </div>
 
-        {/* Toggle Button */}
+        {/* Advanced Toggle */}
         <div className="flex justify-center">
              <button
                 type="button"
-                onClick={() => setIsAdvanced(!isAdvanced)}
-                className={`flex items-center gap-2 px-6 py-2 rounded-full text-sm font-bold border shadow-sm transition-all
+                onClick={() => { playClick(); setIsAdvanced(!isAdvanced); }}
+                className={`flex items-center gap-2 px-6 py-2 text-xs font-bold font-serif tracking-widest transition-all
                     ${isAdvanced 
-                        ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
-                        : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'}
+                        ? 'text-japan-red underline decoration-2 underline-offset-4' 
+                        : 'text-stone-400 hover:text-stone-600'}
                 `}
             >
-                {isAdvanced ? <Settings className="w-4 h-4" /> : <Settings className="w-4 h-4" />}
-                {isAdvanced ? '收起進階設定' : '開啟進階設定 (價格與損益分析)'}
-                {isAdvanced ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {isAdvanced ? <Settings className="w-3 h-3 animate-spin" /> : <Settings className="w-3 h-3" />}
+                進階設定 {isAdvanced ? '開啟' : '關閉'}
             </button>
         </div>
 
-        {/* Section 2: Advanced Settings */}
+        {/* Advanced Section */}
         {isAdvanced && (
-        <div className="animate-in slide-in-from-top-4 fade-in duration-300 bg-white p-6 rounded-2xl shadow-xl shadow-slate-200/50 border border-slate-100 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-500 to-pink-500"></div>
-
-            {/* Price Config */}
-            <div className="mb-6">
-              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">一抽價格 (Price)</label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 w-5 h-5 text-green-500" />
-                <input
-                  type="number"
-                  value={pricePerTicket}
-                  onChange={(e) => setPricePerTicket(Number(e.target.value))}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                />
-              </div>
+        <div className="washi-card p-8 animate-flip-in relative bg-white border-t-4 border-t-japan-indigo">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-japan-indigo text-white px-3 py-1 text-[10px] font-bold tracking-widest rounded-sm">
+                詳細設定
+            </div>
+            
+            {/* Price */}
+            <div className="mb-10 max-w-[200px] mx-auto text-center">
+               <InputField label="一抽價格" value={pricePerTicket} onChange={handleInputChange(setPricePerTicket)} icon={DollarSign} />
            </div>
 
-           {/* Prize Table */}
+           {/* Prizes */}
             <div>
-                <div className="flex justify-between items-end mb-3">
-                    <label className="text-sm font-bold text-slate-700 flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-purple-500" /> 詳細獎項配置
+                <div className="flex justify-between items-end mb-4 border-b border-stone-200 pb-2">
+                    <label className="text-sm font-black font-serif text-stone-600 flex items-center gap-2">
+                        <Brush className="w-4 h-4" /> 賞單詳情
                     </label>
                     <button 
                         type="button" 
                         onClick={addPrizeRow}
-                        className="text-xs flex items-center gap-1 bg-purple-100 text-purple-700 px-3 py-1.5 rounded-lg hover:bg-purple-200 transition font-bold"
+                        className="text-xs font-bold flex items-center gap-1 text-japan-indigo hover:bg-stone-100 px-3 py-1 rounded transition"
                     >
-                        <Plus className="w-3 h-3" /> 新增獎項
+                        <Plus className="w-3 h-3" /> 新增
                     </button>
                 </div>
                 
                 <div className="space-y-2">
                     {/* Header */}
-                    <div className="grid grid-cols-12 gap-2 text-xs font-bold text-slate-400 px-2">
-                        <div className="col-span-5">名稱</div>
-                        <div className="col-span-3 text-center">數量</div>
-                        <div className="col-span-3">市價</div>
+                    <div className="grid grid-cols-12 gap-2 text-[10px] font-bold text-stone-400 px-2 uppercase tracking-wide mb-2">
+                        <div className="col-span-4">賞名</div>
+                        <div className="col-span-3 text-center">剩餘</div>
+                        <div className="col-span-4 text-right">市價</div>
                         <div className="col-span-1"></div>
                     </div>
 
                     {/* Rows */}
                     {prizes.map((prize) => (
-                        <div key={prize.id} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-lg border border-slate-100 group hover:border-purple-200 hover:bg-purple-50/30 transition-colors">
-                             <div className="col-span-5">
+                        <div key={prize.id} className="grid grid-cols-12 gap-2 items-center hover:bg-stone-50 p-2 rounded transition-colors group">
+                             <div className="col-span-4">
                                 <input 
                                     type="text" 
                                     value={prize.name} 
                                     onChange={(e) => updatePrize(prize.id, 'name', e.target.value)}
-                                    className="w-full bg-transparent font-bold text-slate-700 focus:outline-none border-b border-transparent focus:border-purple-300"
+                                    className="w-full bg-transparent font-serif font-black text-japan-dark focus:outline-none text-lg border-b border-transparent focus:border-stone-300"
                                 />
                              </div>
                              <div className="col-span-3">
@@ -243,74 +203,77 @@ const SetupForm: React.FC<SetupFormProps> = ({ onStart }) => {
                                     type="number" 
                                     min="0"
                                     value={prize.remainingCount} 
-                                    onChange={(e) => updatePrize(prize.id, 'remainingCount', Number(e.target.value))}
-                                    className="w-full text-center bg-white border border-slate-200 rounded-md py-1 font-mono text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+                                    onChange={(e) => updatePrize(prize.id, 'remainingCount', e.target.value)}
+                                    className="w-full text-center bg-transparent border-b border-stone-200 py-1 font-serif font-bold focus:border-japan-red outline-none"
                                 />
                              </div>
-                             <div className="col-span-3 relative">
-                                <span className="absolute left-1.5 top-1.5 text-xs text-slate-400">$</span>
+                             <div className="col-span-4">
                                 <input 
                                     type="number" 
                                     min="0"
                                     value={prize.marketValue} 
-                                    onChange={(e) => updatePrize(prize.id, 'marketValue', Number(e.target.value))}
-                                    className="w-full pl-4 pr-1 bg-transparent font-medium text-green-600 focus:outline-none border-b border-transparent focus:border-green-300"
+                                    onChange={(e) => updatePrize(prize.id, 'marketValue', e.target.value)}
+                                    className="w-full bg-transparent text-right font-serif text-stone-600 focus:outline-none focus:text-japan-red font-bold border-b border-transparent focus:border-stone-300"
                                 />
                              </div>
-                             <div className="col-span-1 text-center">
-                                <button type="button" onClick={() => removePrizeRow(prize.id)} className="text-slate-300 hover:text-red-500 transition-colors">
+                             <div className="col-span-1 text-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button type="button" onClick={() => removePrizeRow(prize.id)} className="text-stone-300 hover:text-japan-red">
                                     <Trash2 className="w-4 h-4" />
                                 </button>
                              </div>
                         </div>
                     ))}
 
-                    {/* Small Prize Row */}
-                    <div className="grid grid-cols-12 gap-2 items-center bg-slate-100/50 p-2 rounded-lg border border-dashed border-slate-200 mt-2">
-                        <div className="col-span-5 text-sm text-slate-500 font-medium pl-1">其餘小賞 (F/G/H...)</div>
-                        <div className="col-span-3 text-center text-sm font-mono text-slate-400">{smallPrizeCount}</div>
-                        <div className="col-span-3 relative">
-                            <span className="absolute left-1.5 top-1.5 text-xs text-slate-400">$</span>
+                    <div className="grid grid-cols-12 gap-2 items-center p-3 mt-4 bg-stone-50 rounded">
+                        <div className="col-span-4 text-xs font-bold text-stone-500 font-serif">其餘小賞</div>
+                        <div className="col-span-3 text-center text-sm font-bold text-stone-400 font-serif">{smallPrizeCount}</div>
+                        <div className="col-span-4">
                             <input 
                                 type="number" 
                                 value={smallPrizeValue} 
-                                onChange={(e) => setSmallPrizeValue(Number(e.target.value))}
-                                className="w-full pl-4 pr-1 bg-transparent font-medium text-slate-500 focus:outline-none border-b border-transparent focus:border-slate-300"
+                                onChange={handleInputChange(setSmallPrizeValue)}
+                                className="w-full bg-transparent text-right font-serif font-bold text-stone-500 focus:outline-none border-b border-stone-200 focus:border-stone-400"
                             />
                         </div>
-                        <div className="col-span-1"></div>
                     </div>
                 </div>
             </div>
 
             {/* Last One */}
-            <div className="mt-6 bg-gradient-to-r from-yellow-50 to-orange-50 border border-yellow-200 p-4 rounded-xl flex items-center justify-between">
+            <div className="mt-8 bg-japan-gold/5 border border-japan-gold/20 rounded p-4 flex items-center justify-between">
                 <div>
-                    <span className="font-black text-yellow-700 block text-sm flex items-center gap-2">
-                        <Crown className="w-4 h-4" /> Last One 賞
+                    <span className="font-black font-serif text-japan-gold block text-sm flex items-center gap-2">
+                        <Crown className="w-4 h-4 fill-current" /> Last One 賞
                     </span>
-                    <span className="text-xs text-yellow-600/80">最後一抽的特別獎勵</span>
                 </div>
-                <div className="relative w-32">
-                    <DollarSign className="absolute left-2 top-2.5 w-4 h-4 text-yellow-600" />
+                <div className="w-32 flex items-center gap-1 border-b border-japan-gold/30">
+                    <DollarSign className="w-4 h-4 text-japan-gold/50" />
                     <input
                         type="number"
                         value={lastOneValue}
-                        onChange={(e) => setLastOneValue(Number(e.target.value))}
-                        className="w-full pl-8 pr-3 py-2 bg-white border border-yellow-300 rounded-lg focus:ring-yellow-500 focus:border-yellow-500 text-yellow-800 font-bold text-right outline-none"
+                        onChange={handleInputChange(setLastOneValue)}
+                        className="w-full bg-transparent py-1 px-2 text-right text-japan-gold font-bold text-lg outline-none font-serif"
                     />
                 </div>
             </div>
         </div>
         )}
 
-        <div className="pt-4">
+        <div className="pt-6 flex justify-center">
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl shadow-xl shadow-indigo-500/20 transform transition-all active:scale-[0.98] flex items-center justify-center gap-3 text-lg"
+            className="group relative inline-flex items-center justify-center p-1"
           >
-            <Calculator className="w-6 h-6" />
-            建立模擬盤面
+            {/* Outer ring */}
+            <div className="absolute inset-0 border-2 border-japan-red rounded opacity-80 group-hover:opacity-100 transition-opacity transform rotate-1 group-hover:rotate-0 transition-transform duration-300"></div>
+            <div className="absolute inset-0 border-2 border-japan-red rounded opacity-80 group-hover:opacity-100 transition-opacity transform -rotate-1 group-hover:rotate-0 transition-transform duration-300"></div>
+            
+            <div className="relative bg-japan-red hover:bg-red-700 text-white font-serif font-black py-4 px-12 shadow-lg hover:shadow-xl transition-all active:scale-[0.98]">
+               <div className="flex flex-col items-center leading-none">
+                    <span className="text-2xl tracking-[0.5em] ml-2">模擬開始</span>
+                    <span className="text-[10px] tracking-widest uppercase opacity-70 mt-1">Start Simulation</span>
+               </div>
+            </div>
           </button>
         </div>
       </form>
