@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  
+  <!-- Background Shape -->
+  <rect x="0" y="0" width="512" height="512" rx="120" fill="url(#grad)" />
+  
+  <!-- Ticket Outline -->
+  <g transform="translate(106, 106) scale(0.6)">
+    <path d="M352 0H148c-26.5 0-48 21.5-48 48v288c0 26.5 21.5 48 48 48h204c26.5 0 48-21.5 48-48V48c0-26.5-21.5-48-48-48z" fill="#ffffff" filter="url(#shadow)"/>
+    
+    <!-- Perforation Lines -->
+    <line x1="100" y1="280" x2="400" y2="280" stroke="#e2e8f0" stroke-width="4" stroke-dasharray="12 12" />
+    
+    <!-- Letter A -->
+    <text x="250" y="200" font-family="sans-serif" font-weight="900" font-size="180" text-anchor="middle" fill="#4f46e5">A</text>
+    
+    <!-- Japanese Text or Decor -->
+    <circle cx="250" cy="330" r="30" fill="#fbbf24" />
+  </g>
+  
+  <!-- Sparkles -->
+  <path d="M400 80L410 100L430 110L410 120L400 140L390 120L370 110L390 100Z" fill="#fbbf24"/>
+  <circle cx="100" cy="400" r="15" fill="#ffffff" opacity="0.5"/>
+</svg>
