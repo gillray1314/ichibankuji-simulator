@@ -1,0 +1,5 @@
+{
+  "name": "一番賞模擬預測器 (Ichiban Kuji Simulator)",
+  "description": "一個協助玩家計算一番賞機率、模擬抽獎過程，並透過 AI 提供策略建議的工具。",
+  "requestFramePermissions": []
+}
